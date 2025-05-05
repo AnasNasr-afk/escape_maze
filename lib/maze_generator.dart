@@ -1,69 +1,71 @@
 import 'dart:math';
+import 'cell.dart';
 
-class PrimMaze {
-  final int width;
-  final int height;
-  late List<List<bool>> grid;
-  Set<Point<int>> _frontiers = {};
-  Point<int>? currentFrontier;
+class MazeGenerator {
+  final int width, height;
+  final Random _random = Random();
+  late List<List<Cell>> grid;
+  List<Cell> frontier = [];
+  Cell? frontCell;  // Track the front cell
 
-  PrimMaze(this.width, this.height) {
-    grid = List.generate(width, (_) => List.generate(height, (_) => false));
-    _init();
+  MazeGenerator(this.width, this.height) {
+    grid = List.generate(
+      height,
+          (y) => List.generate(width, (x) => Cell(x: x, y: y)),
+    );
   }
 
-  void _init() {
-    final rand = Random();
-    int x = rand.nextInt(width ~/ 2) * 2 + 1;
-    int y = rand.nextInt(height ~/ 2) * 2 + 1;
-    grid[x][y] = true;
-    _frontiers = _getFrontiers(x, y);
+  void initialize() {
+    int startX = _random.nextInt(width ~/ 2) * 2;
+    int startY = _random.nextInt(height ~/ 2) * 2;
+    grid[startY][startX].isWall = false;
+    _addFrontiers(startX, startY);
+    frontCell = grid[startY][startX];  // Set the starting cell as the front cell
   }
 
-  Set<Point<int>> _getFrontiers(int x, int y) {
-    final frontiers = <Point<int>>{};
-    for (var offset in [Point(-2, 0), Point(2, 0), Point(0, -2), Point(0, 2)]) {
-      int nx = x + offset.x;
-      int ny = y + offset.y;
-      if (_inBounds(nx, ny) && !grid[nx][ny]) {
-        frontiers.add(Point(nx, ny));
+  void _addFrontiers(int x, int y) {
+    const directions = [[2, 0], [-2, 0], [0, 2], [0, -2]];
+    for (var dir in directions) {
+      int nx = x + dir[0], ny = y + dir[1];
+      if (_inBounds(nx, ny) && grid[ny][nx].isWall && !frontier.contains(grid[ny][nx])) {
+        frontier.add(grid[ny][nx]);
       }
     }
-    return frontiers;
   }
-
-  bool _inBounds(int x, int y) =>
-      x > 0 && y > 0 && x < width - 1 && y < height - 1;
 
   bool step() {
-    if (_frontiers.isEmpty) return false;
-
-    final rand = Random();
-    currentFrontier = _frontiers.elementAt(rand.nextInt(_frontiers.length));
-    _frontiers.remove(currentFrontier);
-
-    int x = currentFrontier!.x;
-    int y = currentFrontier!.y;
-
-    List<Point<int>> neighbors = [];
-    for (var offset in [Point(-2, 0), Point(2, 0), Point(0, -2), Point(0, 2)]) {
-      int nx = x + offset.x;
-      int ny = y + offset.y;
-      if (_inBounds(nx, ny) && grid[nx][ny]) {
-        neighbors.add(Point(nx, ny));
-      }
+    if (frontier.isEmpty) {
+      return false;  // Finish when no more frontiers are left
     }
 
+    final current = frontier.removeAt(_random.nextInt(frontier.length));
+    current.isCurrent = true;  // Mark the current cell
+
+    // Set the front cell to the newly chosen cell
+    frontCell = current;
+
+    final neighbors = _visitedNeighbors(current.x, current.y);
     if (neighbors.isNotEmpty) {
-      final chosen = neighbors[rand.nextInt(neighbors.length)];
-      int wallX = (x + chosen.x) ~/ 2;
-      int wallY = (y + chosen.y) ~/ 2;
-      grid[x][y] = true;
-      grid[wallX][wallY] = true;
-
-      _frontiers.addAll(_getFrontiers(x, y));
+      final neighbor = neighbors[_random.nextInt(neighbors.length)];
+      int wallX = (current.x + neighbor.x) ~/ 2;
+      int wallY = (current.y + neighbor.y) ~/ 2;
+      grid[current.y][current.x].isWall = false;
+      grid[wallY][wallX].isWall = false;
+      _addFrontiers(current.x, current.y);
     }
 
-    return true;
+    current.isCurrent = false;
+    return true;  // Keep generating steps
   }
+
+  List<Cell> _visitedNeighbors(int x, int y) {
+    const dirs = [[2, 0], [-2, 0], [0, 2], [0, -2]];
+    return dirs
+        .map((dir) => [x + dir[0], y + dir[1]])
+        .where((pos) => _inBounds(pos[0], pos[1]) && !grid[pos[1]][pos[0]].isWall)
+        .map((pos) => grid[pos[1]][pos[0]])
+        .toList();
+  }
+
+  bool _inBounds(int x, int y) => x >= 0 && x < width && y >= 0 && y < height;
 }
